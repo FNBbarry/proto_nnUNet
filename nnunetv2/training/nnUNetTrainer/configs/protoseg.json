@@ -1,0 +1,26 @@
+{
+    "network":{
+      "backbone": "sam",
+      "bn_type": "torchsyncbn"
+    },
+    "loss": {
+      "loss_type": "fs_auxce_loss",
+      "params": {
+        "ce_reduction": "elementwise_mean",
+        "ce_ignore_index": -1,
+        "ohem_minkeep": 100000,
+        "ohem_thresh": 0.9
+      }
+    },
+    "protoseg": {
+      "gamma": 0.999,
+      "loss_ppc_weight": 0.01,
+      "loss_ppd_weight": 0.001,
+      "num_prototype": 15,
+      "pretrain_prototype": false,
+      "use_rmi": false,
+      "use_prototype": true,
+      "update_prototype": true,
+      "warmup_iters": 0
+    }
+}
