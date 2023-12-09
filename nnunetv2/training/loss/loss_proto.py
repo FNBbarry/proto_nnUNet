@@ -83,7 +83,7 @@ class PixelPrototypeCELoss(nn.Module, ABC):
             importance_sample_ratio = 0.75
             self.seg_criterion = SetCriterion(
                 self.configer.get('data','num_classes'),
-                matcher=HungarianMatcher(cost_class=class_weight,cost_mask=mask_weight,cost_dice=dice_weight,num_points=train_num_points),
+                # matcher=HungarianMatcher(cost_class=class_weight,cost_mask=mask_weight,cost_dice=dice_weight,num_points=train_num_points),
                 weight_dict=weight_dict,
                 eos_coef=0.1,
                 losses=["labels", "masks"],

@@ -198,21 +198,6 @@ class ProtoSamMask2FormerNet(nn.Module):
 
         outputs = self.transformer_decoder(multi_scale_features[::-1],mask_features,mask=None)
         
-        # validation or inference process
-        if not self.training:
-            mask_cls_results = outputs["pred_logits"][-1]
-            mask_pred_results = outputs["pred_masks"]
-
-            del outputs
-
-            processed_results = []
-            for mask_cls_result, mask_pred_result in zip(mask_cls_results, mask_pred_results):
-                # semantic segmentation inference
-                r = retry_if_cuda_oom(self.semantic_inference)(mask_cls_result, mask_pred_result)
-                processed_results.append(r.unsqueeze(0))
-            preds_list = torch.concat(processed_results,dim=0)
-            return preds_list
-        
         # training process
         _c = torch.concat(outputs['pred_logits'],dim=1)
             
@@ -241,3 +226,18 @@ class ProtoSamMask2FormerNet(nn.Module):
             gt_seg = torch.concat(gt_seg_labels,dim=0)
             contrast_logits, contrast_target = self.prototype_learning(_c, out_seg, gt_seg.to(out_seg.device).squeeze(0).view(-1), masks)
             return {'seg': outputs, 'logits': contrast_logits, 'target': contrast_target}
+        
+         # validation or inference process
+        if not self.training:
+            mask_cls_results = out_seg#由于mask的个数就是类别数，所以可以直接用和prototype计算后的结果做class_embed
+            mask_pred_results = outputs["pred_masks"]
+
+            del outputs
+
+            processed_results = []
+            for mask_cls_result, mask_pred_result in zip(mask_cls_results, mask_pred_results):
+                # semantic segmentation inference
+                r = retry_if_cuda_oom(self.semantic_inference)(mask_cls_result, mask_pred_result)
+                processed_results.append(r.unsqueeze(0))
+            preds_list = torch.concat(processed_results,dim=0)
+            return preds_list

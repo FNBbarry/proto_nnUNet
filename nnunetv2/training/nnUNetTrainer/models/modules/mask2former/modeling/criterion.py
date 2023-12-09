@@ -100,7 +100,8 @@ class SetCriterion(nn.Module):
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
 
-    def __init__(self, num_classes, matcher, weight_dict, eos_coef, losses,
+    # def __init__(self, num_classes, matcher, weight_dict, eos_coef, losses,
+    def __init__(self, num_classes, weight_dict, eos_coef, losses,
                  num_points, oversample_ratio, importance_sample_ratio):
         """Create the criterion.
         Parameters:
@@ -112,7 +113,7 @@ class SetCriterion(nn.Module):
         """
         super().__init__()
         self.num_classes = num_classes
-        self.matcher = matcher
+        # self.matcher = matcher
         self.weight_dict = weight_dict
         self.eos_coef = eos_coef
         self.losses = losses
@@ -124,27 +125,27 @@ class SetCriterion(nn.Module):
         self.num_points = num_points
         self.oversample_ratio = oversample_ratio
         self.importance_sample_ratio = importance_sample_ratio
+    # # 由于本文是用masks实现语义分割，所以此处基于labels的loss没有意义
+    # def loss_labels(self, outputs, targets, indices, num_masks):
+    #     """Classification loss (NLL)
+    #     targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
+    #     """
+    #     assert "pred_logits" in outputs
+    #     src_logits = outputs["pred_logits"].float()
 
-    def loss_labels(self, outputs, targets, indices, num_masks):
-        """Classification loss (NLL)
-        targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
-        """
-        assert "pred_logits" in outputs
-        src_logits = outputs["pred_logits"].float()
-
-        idx = self._get_src_permutation_idx(indices)
-        target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
-        target_classes = torch.full(
-            src_logits.shape[:2], self.num_classes, dtype=torch.int64, device=src_logits.device
-        )
-        target_classes[idx] = target_classes_o
+    #     idx = self._get_src_permutation_idx(indices)
+    #     target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
+    #     target_classes = torch.full(
+    #         src_logits.shape[:2], self.num_classes, dtype=torch.int64, device=src_logits.device
+    #     )
+    #     target_classes[idx] = target_classes_o
         
-        empty_weight = torch.ones(self.num_classes, device=src_logits.device)
-        empty_weight[-1] = self.eos_coef
+    #     empty_weight = torch.ones(self.num_classes, device=src_logits.device)
+    #     empty_weight[-1] = self.eos_coef
 
-        loss_ce = F.cross_entropy(src_logits.transpose(1, 2), target_classes, empty_weight)
-        losses = {"loss_ce": loss_ce}
-        return losses
+    #     loss_ce = F.cross_entropy(src_logits.transpose(1, 2), target_classes, empty_weight)
+    #     losses = {"loss_ce": loss_ce}
+    #     return losses
     
     def loss_masks(self, outputs, targets, indices, num_masks):
         """Compute the losses related to the masks: the focal loss and the dice loss.
@@ -212,10 +213,10 @@ class SetCriterion(nn.Module):
 
     def get_loss(self, loss, outputs, targets, indices, num_masks):
         loss_map = {
-            'labels': self.loss_labels,
+            # 'labels': self.loss_labels,
             'masks': self.loss_masks,
         }
-        assert loss in loss_map, f"do you really want to compute {loss} loss?"
+        # assert loss in loss_map, f"do you really want to compute {loss} loss?"
         return loss_map[loss](outputs, targets, indices, num_masks)
 
     def forward(self, outputs, targets):
@@ -229,8 +230,8 @@ class SetCriterion(nn.Module):
         outputs_without_aux = {k: v for k, v in outputs.items() if k != "aux_outputs"}
 
         # Retrieve the matching between the outputs of the last layer and the targets
-        indices = self.matcher(outputs_without_aux, targets)
-
+        # indices = self.matcher(outputs_without_aux, targets)
+        indices=[(t['labels'],torch.arange(len(t['labels']),device=t['labels'].device)) for t in targets]
         # Compute the average number of target boxes accross all nodes, for normalization purposes
         num_masks = sum(len(t["labels"]) for t in targets)
         num_masks = torch.as_tensor(
@@ -260,7 +261,7 @@ class SetCriterion(nn.Module):
     def __repr__(self):
         head = "Criterion " + self.__class__.__name__
         body = [
-            "matcher: {}".format(self.matcher.__repr__(_repr_indent=8)),
+            # "matcher: {}".format(self.matcher.__repr__(_repr_indent=8)),
             "losses: {}".format(self.losses),
             "weight_dict: {}".format(self.weight_dict),
             "num_classes: {}".format(self.num_classes),

@@ -302,7 +302,9 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
         if self.mask_classification:
             self.class_embed = nn.Linear(hidden_dim, num_classes)
         self.mask_embed = MLP(hidden_dim, hidden_dim, mask_dim, 3)
-
+        # 把num_queries的个数改为class_number,因为语义分割mask的个数就是instance对应的mask
+        self.mask_conversion = nn.Conv1d(num_queries,num_classes,1)
+        
     @classmethod
     def from_config(cls, cfg, in_channels, mask_classification):
         ret = {}
@@ -385,7 +387,7 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
                 output
             )
 
-            outputs_class, outputs_mask, attn_mask = self.forward_prediction_heads(output, mask_features, attn_mask_target_size=size_list[(i + 1) % self.num_feature_levels])
+            outputs_class, outputs_mask, attn_mask = self.forward_prediction_heads(output, mask_features, attn_mask_target_size=size_list[(i + 1) % self.num_feature_levels],layer_index=i)
             predictions_class.append(outputs_class)
             predictions_mask.append(outputs_mask)
 
@@ -401,11 +403,14 @@ class MultiScaleMaskedTransformerDecoder(nn.Module):
         }
         return out
 
-    def forward_prediction_heads(self, output, mask_features, attn_mask_target_size):
+    def forward_prediction_heads(self, output, mask_features, attn_mask_target_size, layer_index=-1):
         decoder_output = self.decoder_norm(output)
         decoder_output = decoder_output.transpose(0, 1)
         outputs_class = self.class_embed(decoder_output)
         mask_embed = self.mask_embed(decoder_output)
+        # 添加一个layer_index方便确认最后一个transformer decoder block
+        if layer_index==self.num_layers-1:
+            mask_embed = self.mask_conversion(mask_embed)
         outputs_mask = torch.einsum("bqc,bcdhw->bqdhw", mask_embed, mask_features)
 
         # NOTE: prediction is of higher-resolution
