@@ -50,7 +50,7 @@ class ProtoSamNet(nn.Module):
                                                                 num_input_channels = num_input_channels, 
                                                                 deep_supervision = deep_supervision)
 
-        in_channels = 1920
+        in_channels = 434
         self.cls_head = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
             ModuleHelper.BNReLU(in_channels, bn_type=self.configer.get('network', 'bn_type')),
@@ -63,12 +63,12 @@ class ProtoSamNet(nn.Module):
             nn.Dropout3d(0.10)
         )
 
-        self.prototypes = nn.Parameter(torch.zeros(self.num_classes, self.num_prototype, in_channels//16),
+        self.prototypes = nn.Parameter(torch.zeros(self.num_classes, self.num_prototype, in_channels),
                                        requires_grad=True)
 
         self.proj_head = ProjectionHead(in_channels, in_channels)
-        self.proj_head_3d = ProjectionHead_3D_upscale(in_channels, in_channels // 16)
-        self.feat_norm = nn.LayerNorm(in_channels//16)
+        self.proj_head_3d = ProjectionHead_3D(in_channels, in_channels)
+        self.feat_norm = nn.LayerNorm(in_channels)
         self.mask_norm = nn.LayerNorm(self.num_classes)
 
         trunc_normal_(self.prototypes, std=0.02)
@@ -135,17 +135,19 @@ class ProtoSamNet(nn.Module):
 
         x = self.backbone.image_encoder(x_)
 
-        _, _, d, h, w = x_.size()
-        # feats = x
-        feats = torch.concat(x,dim=1)
-        # mode_interpolate = "bilinear" if len(x_.size()) == 4 else "trilinear"
+        masks, iou_pred, src, upscaled_embedding = self.backbone.mask_decoder(x, # (B, 256, 64, 64)
+            image_pe=self.backbone.prompt_encoder.get_dense_pe(), # (1, 256, 64, 64)
+            multimask_output=False,
+        )
+        _, _, d, h, w = masks.size()
+        mode_interpolate = "bilinear" if len(x_.size()) == 4 else "trilinear"
         
-        # feat1 = x[0]
-        # feat2 = F.interpolate(x[1], size=(d, h, w), mode=mode_interpolate, align_corners=True)
-        # feat3 = F.interpolate(x[2], size=(d, h, w), mode=mode_interpolate, align_corners=True)
-        # feat4 = F.interpolate(x[3], size=(d, h, w), mode=mode_interpolate, align_corners=True)
+        feat1 = masks
+        feat2 = F.interpolate(x_, size=(d, h, w), mode=mode_interpolate, align_corners=True)
+        feat3 = F.interpolate(src, size=(d, h, w), mode=mode_interpolate, align_corners=True)
+        feat4 = upscaled_embedding
 
-        # feats = torch.cat([feat1, feat2, feat3, feat4], 1)
+        feats = torch.cat([feat1, feat2, feat3, feat4], 1)
 
         if len(x_.size()) == 4 :
             c = self.cls_head(feats)
@@ -173,9 +175,10 @@ class ProtoSamNet(nn.Module):
             out_seg = rearrange(out_seg, "(b h w d) k -> b k d h w", b=feats.shape[0], h=h, d=d)
 
         if pretrain_prototype is False and self.use_prototype is True and gt_semantic_seg is not None:
-            # gt_seg = F.interpolate(gt_semantic_seg.float(), size=feats.size()[2:], mode='nearest').view(-1)
-            gt_seg = gt_semantic_seg.float().view(-1)
+            gt_seg = F.interpolate(gt_semantic_seg.float(), size=feats.size()[2:], mode='nearest').view(-1)
+            # gt_seg = gt_semantic_seg.float().view(-1)
             contrast_logits, contrast_target = self.prototype_learning(_c, out_seg, gt_seg, masks)
+            out_seg = F.interpolate(out_seg, size=gt_semantic_seg.shape[-3:], mode='trilinear', align_corners=False)
             return {'seg': out_seg, 'logits': contrast_logits, 'target': contrast_target}
-            
+       
         return out_seg

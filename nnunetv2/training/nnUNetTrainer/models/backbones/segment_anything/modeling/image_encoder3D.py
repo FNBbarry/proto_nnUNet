@@ -136,23 +136,23 @@ class ImageEncoderViT3D(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # input_size = [1,1,256,256,256]
         # import IPython; IPython.embed()
-        features = []
+        # features = []
         x = self.patch_embed(x)
         # x = [1,16,16,16,768]
         # import pdb; pdb.set_trace()
         if self.pos_embed is not None:
             x = x + self.pos_embed
-        features.append(x.permute(0, 4, 1, 2, 3))
+        # features.append(x.permute(0, 4, 1, 2, 3))
         for index,blk in enumerate(self.blocks):
             x = blk(x)
-            if index!=0 and index%6==0:
-                features.append(x.permute(0, 4, 1, 2, 3))
+            # if index!=0 and index%6==0:
+            #     features.append(x.permute(0, 4, 1, 2, 3))
         # x = [1,16,16,16,768]
         x = self.neck(x.permute(0, 4, 1, 2, 3))
-        features.append(x)
+        # features.append(x)
         # output_size = [1,256,16,16,16]
-        return features
-        # return x
+        # return features
+        return x
 
 
 class Block3D(nn.Module):

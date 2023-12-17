@@ -32,8 +32,8 @@ class protoSamTrainer(nnUNetTrainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
                  device: torch.device = torch.device('cuda')):
         super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
-        self.num_epochs = 50
-        self.initial_lr = 16*1e-2
+        self.num_epochs = 100
+        self.initial_lr = 1e-2
 
     @staticmethod
     def build_network_architecture(plans_manager: PlansManager,
@@ -41,10 +41,10 @@ class protoSamTrainer(nnUNetTrainer):
                                    configuration_manager: ConfigurationManager,
                                    num_input_channels,
                                    enable_deep_supervision: bool = True) -> nn.Module:
-        configer = Configer(configs='/media/barry/SELF/DeepEyes_Project/20230917/nnUNet/nnunetv2/training/nnUNetTrainer/configs/protoseg.json') 
+        configer = Configer(configs='/media/barry/SELF/DeepEyes_Project/20230917/proto_nnUNet/nnunetv2/training/nnUNetTrainer/configs/protoseg.json') 
         return ProtoSamNet(plans_manager,dataset_json,configuration_manager,num_input_channels,configer=configer,deep_supervision=enable_deep_supervision)
     
-    def train_step(self, batch: dict,id,accumulation_steps=16) -> dict:
+    def train_step(self, batch: dict) -> dict:
         data = batch['data']
         target = batch['target']
 
@@ -54,7 +54,7 @@ class protoSamTrainer(nnUNetTrainer):
         else:
             target = target.to(self.device, non_blocking=True)
 
-        # self.optimizer.zero_grad()
+        self.optimizer.zero_grad()
         # Autocast is a little bitch.
         # If the device_type is 'cpu' then it's slow as heck and needs to be disabled.
         # If the device_type is 'mps' then it will complain that mps is not implemented, even if enabled=False is set. Whyyyyyyy. (this is why we don't make use of enabled=False)
@@ -63,26 +63,26 @@ class protoSamTrainer(nnUNetTrainer):
             output = self.network(data,gt_semantic_seg=target[0])
             # del data
             l = self.loss(output, target)
-            l = l / accumulation_steps 
+            # l = l / accumulation_steps 
 
         if self.grad_scaler is not None:
             self.grad_scaler.scale(l).backward()
-            if (id+1) % accumulation_steps == 0: 
-                self.grad_scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
-                self.grad_scaler.step(self.optimizer)
-                self.grad_scaler.update()
-                self.optimizer.zero_grad()
+            # if (id+1) % accumulation_steps == 0: 
+            self.grad_scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+            self.grad_scaler.step(self.optimizer)
+            self.grad_scaler.update()
+                # self.optimizer.zero_grad()
         else:
             l.backward()
-            if (id+1) % accumulation_steps == 0: 
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
-                self.optimizer.step()
-                self.optimizer.zero_grad()
+            # if (id+1) % accumulation_steps == 0: 
+            torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+            self.optimizer.step()
+                # self.optimizer.zero_grad()
         return {'loss': l.detach().cpu().numpy()}
 
     def _build_loss(self):
-        configer = Configer(configs='/media/barry/SELF/DeepEyes_Project/20230917/nnUNet/nnunetv2/training/nnUNetTrainer/configs/protoseg.json')
+        configer = Configer(configs='/media/barry/SELF/DeepEyes_Project/20230917/proto_nnUNet/nnunetv2/training/nnUNetTrainer/configs/protoseg.json')
         return PixelPrototypeCELoss(configer)
 
     def on_train_start(self):
@@ -327,7 +327,7 @@ class protoSamTrainer(nnUNetTrainer):
             self.on_train_epoch_start()
             train_outputs = []
             for batch_id in range(self.num_iterations_per_epoch):
-                train_outputs.append(self.train_step(next(self.dataloader_train),batch_id))
+                train_outputs.append(self.train_step(next(self.dataloader_train)))
             self.on_train_epoch_end(train_outputs)
 
             with torch.no_grad():

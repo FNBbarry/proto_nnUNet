@@ -72,25 +72,25 @@ class PixelPrototypeCELoss(nn.Module, ABC):
         if self.use_rmi:
             self.seg_criterion = FSAuxRMILoss(configer=configer)
         else:
-            # self.seg_criterion = FSCELoss(configer=configer)
-            # mask2former 专属
-            class_weight = 2.0
-            mask_weight = 5.0
-            dice_weight = 5.0
-            train_num_points = 12544
-            weight_dict = {"loss_ce": class_weight, "loss_mask": mask_weight, "loss_dice": dice_weight}
-            oversample_ratio = 3.0
-            importance_sample_ratio = 0.75
-            self.seg_criterion = SetCriterion(
-                self.configer.get('data','num_classes'),
-                # matcher=HungarianMatcher(cost_class=class_weight,cost_mask=mask_weight,cost_dice=dice_weight,num_points=train_num_points),
-                weight_dict=weight_dict,
-                eos_coef=0.1,
-                losses=["labels", "masks"],
-                num_points=train_num_points,
-                oversample_ratio=oversample_ratio,
-                importance_sample_ratio=importance_sample_ratio,
-                )
+            self.seg_criterion = FSCELoss(configer=configer)
+            # # mask2former 专属
+            # class_weight = 2.0
+            # mask_weight = 5.0
+            # dice_weight = 5.0
+            # train_num_points = 12544
+            # weight_dict = {"loss_ce": class_weight, "loss_mask": mask_weight, "loss_dice": dice_weight}
+            # oversample_ratio = 3.0
+            # importance_sample_ratio = 0.75
+            # self.seg_criterion = SetCriterion(
+            #     self.configer.get('data','num_classes'),
+            #     # matcher=HungarianMatcher(cost_class=class_weight,cost_mask=mask_weight,cost_dice=dice_weight,num_points=train_num_points),
+            #     weight_dict=weight_dict,
+            #     eos_coef=0.1,
+            #     losses=["labels", "masks"],
+            #     num_points=train_num_points,
+            #     oversample_ratio=oversample_ratio,
+            #     importance_sample_ratio=importance_sample_ratio,
+            #     )
 
         self.ppc_criterion = PPC(configer=configer)
         self.ppd_criterion = PPD(configer=configer)
@@ -100,8 +100,8 @@ class PixelPrototypeCELoss(nn.Module, ABC):
         # 从这里开始target要变成适用于mask2former代码中关于loss计算的形式
 
         if isinstance(preds, dict):
-            # mask2former 专属
-            target = self.prepare_targets(target[0])
+            # # mask2former 专属
+            # target = self.prepare_targets(target[0])
             assert "seg" in preds
             assert "logits" in preds
             assert "target" in preds
@@ -113,18 +113,18 @@ class PixelPrototypeCELoss(nn.Module, ABC):
             loss_ppd = self.ppd_criterion(contrast_logits, contrast_target)
 
             # pred = F.interpolate(input=seg, size=(h, w), mode='bilinear', align_corners=True)
-            # loss = self.seg_criterion(seg, target[0].squeeze(1).long())
-            # return loss + self.loss_ppc_weight * loss_ppc + self.loss_ppd_weight * loss_ppd
-            # mask2former 专属
-            loss = self.seg_criterion(seg, target)
-            return loss['loss_mask']+loss['loss_dice'] + self.loss_ppc_weight * loss_ppc + self.loss_ppd_weight * loss_ppd
+            loss = self.seg_criterion(seg, target[0].squeeze(1).long())
+            return loss + self.loss_ppc_weight * loss_ppc + self.loss_ppd_weight * loss_ppd
+            # # mask2former 专属
+            # loss = self.seg_criterion(seg, target)
+            # return loss['loss_mask']+loss['loss_dice'] + self.loss_ppc_weight * loss_ppc + self.loss_ppd_weight * loss_ppd
             
 
         # seg = preds
         # pred = F.interpolate(input=seg, size=(h, w), mode='bilinear', align_corners=True)
-        # loss = self.seg_criterion(preds, target[0].squeeze(1).long())
-        # mask2former 专属    
-        loss = self.seg_criterion_normal(preds, target[0].squeeze(1).long())
+        loss = self.seg_criterion(preds, target[0].squeeze(1).long())
+        # # mask2former 专属    
+        # loss = self.seg_criterion_normal(preds, target[0].squeeze(1).long())
         return loss
     
     def prepare_targets(self, targets):
